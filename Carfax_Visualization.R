@@ -1,9 +1,9 @@
 library(ggplot2)
 library(dplyr)
-library(tidyverse)
 library(RColorBrewer)
 
 cardata = read.csv("carfax/finaldata.csv")
+head(cardata)
 #remove the commas
 cardata$price = as.numeric(gsub(",", "", cardata$price))
 cardata$mileage = as.numeric(gsub(",", "", cardata$mileage))
@@ -14,57 +14,89 @@ names(cardata)[17] = 'yr'
 #Set scale to not use sci notation
 options(scipen=6)
 
+#preparing values for the t.tests: 
+withaccident = cardata$price[cardata$accident != "No accidents reported to CARFAX"]
+withoutaccident = cardata$price[cardata$accident == "No accidents reported to CARFAX"]
+withautomatic = cardata$price[cardata$transmission == "Automatic"]
+withmanual = cardata$price[cardata$transmission == "Manual"]
+
 #preparing grouping for the plots
-yrgroup = cardata %>% group_by(yr) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
-mileagegroup = cardata %>% group_by(mileage) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
-acc = cardata %>% group_by(accident) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
-mkgroup = cardata %>% group_by(make) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
+yrgroup = cardata %>% group_by(yr) %>% filter(yr >= 2000) %>% summarize(tot = n(), meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
+mileagegroup = cardata %>% summarize(meanval = mean(mileage), medianval = median(mileage), std = sd(mileage))
+acc = cardata %>% group_by(accident) %>% summarize(medianval = median(price), std = sd(price))
+mkgroup = cardata %>% group_by(make) %>% summarize(medianval = median(price), std = sd(price)) %>% arrange(desc(medianval))
 trnsmsngroup = cardata %>% group_by(transmission) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
-fuelgroup = cardata %>% group_by(fuel) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
-bdygroup = cardata %>% group_by(body_style) %>% summarize(meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
-modeldata = cardata %>% group_by(model) %>% filter(n()>=50) %>% summarize(number = n(), meanval = mean(price), std = sd(price)) %>% arrange(desc(meanval))
+fuelgroup = cardata %>% group_by(fuel) %>% summarize(meanval = median(price), std = sd(price)) %>% arrange(desc(meanval))
+bdygroup = cardata %>% group_by(body_style) %>% summarize(meanval = median(price), std = sd(price)) %>% arrange(desc(meanval))
+modeldata = cardata %>% group_by(model) %>% filter(n()>=50) %>% summarize(tot = n(), meanval = median(price), std = sd(price)) %>% arrange(desc(meanval))
 
 acc[is.na(acc)] = 0
 #Pull out the no accidents line of data
 noacc = (acc[16, 2:3])
 acc = acc[c(1:15, 17:20), ]
-accdata = acc %>% summarise(mn = mean(meanval), newstd = sd(std))
+accdata = acc %>% summarise(mn = median(medianval), newstd = sd(std))
 #noacc gives side-by-side comparison of 
 noacc[2, ] = c(accdata$mn, accdata$newstd)
 noacc = noacc %>% mutate(accreport = c('No Accidents Reported', 'Accidents Reported'))
-noacc = noacc %>% select(accreport, meanval, std)
+noacc = noacc %>% select(accreport, medianval, std)
 
 #boxplot of the data by year
-cardata %>% ggplot(., aes(x = yr, y = price)) + geom_jitter() + xlab('Year') + ylab('Price') + ggtitle("Used Car Resale Data: Price vs. Year")
+cardata %>% ggplot(., aes(x = yr, y = price)) + geom_jitter(color = "dark green") + xlab('Year') + ylab('Price') + ggtitle("Used Car Resale Data: Price vs. Year") + scale_colour_hue()
 cardata %>% ggplot(., aes(x = reorder(yr, yr), y = price)) + geom_boxplot() + ggtitle("Used Car Resale Data: Price vs. Year") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Year') + ylab('Selling Price')
-yrgroup %>% ggplot(., aes(x = reorder(yr, yr), y = meanval)) + geom_bar(stat = 'identity')+ geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Year") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Year') + ylab('Avg. Selling Price')
+yrgroup %>% ggplot(., aes(x = reorder(yr, yr), y = meanval)) + geom_bar(stat = 'identity', fill = "orange")+ geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Year") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Year') + ylab('Avg. Selling Price')
+yrgroup %>% ggplot(., aes(x = reorder(yr, yr), y = tot)) + geom_bar(stat = 'identity', fill = "purple") + ggtitle("Used Car Resale Data: Number of Listings by Year") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Year') + ylab('Number of Listings')
 
 #Number of used cars vs. Mileage
-cardata %>% ggplot(., aes(x = mileage)) + geom_histogram(bins = 40) + ggtitle('Used Cars for Sale by Mileage (6747 total)') + xlab('Mileage') + ylab("Number For Sale") + geom_density(alpha = .2, fill = 'white')
-cardata %>% ggplot(., aes(x = mileage)) + geom_density() + ggtitle('Used Cars for Sale by Mileage (6747 total)') + xlab('Mileage') + ylab("Density")
-cardata %>% ggplot(., aes(x = yr, y = mileage)) + geom_hex() + xlab('Year') + ylab('Mileage') + ggtitle("Used Car Resale Data: Mileage vs. Year")
+cardata %>% ggplot(., aes(x = mileage)) + geom_histogram(bins = 35, fill = "blue") + ggtitle('Used Cars for Sale by Mileage (6747 total)') + xlab('Mileage') + ylab("Number For Sale") + geom_density(alpha = .2, fill = 'white')
 
+plot(density(cardata$mileage), xlab = "mileage", main = "Density Plot of Used Cars for Sale by Mileage (6747 total)", col = "dark green")
+abline(v = mean(cardata$mileage), lwd = 2, lty = 2, col = "purple")
+abline(v = median(cardata$mileage), lwd = 2, lty = 2, col = "magenta")
+legend("topright", c("Mean", "Median"), lwd = 2, lty = 2, col = c("purple", "magenta"))
+
+mileagegroup
+    
 #density hex plot by mileage
 cardata %>% ggplot(., aes(x = mileage, y = price)) + geom_hex() + ggtitle("Used Car Resale Data: Price vs. Mileage") + xlab('Mileage') + ylab('Selling Price')
+cardata %>% ggplot(., aes(x = mileage, y = price)) + geom_density2d() + ggtitle("Used Car Resale Data: Price vs. Mileage") + xlab('Mileage') + ylab('Selling Price')
+
+#mileage, year vs. price
+cardata %>% ggplot(., aes(x = yr, y = mileage)) + geom_hex() + xlab('Year') + ylab('Mileage') + ggtitle("Used Car Resale Data: Mileage vs. Year")
 
 #By Make
-mkgroup %>% ggplot(., aes(x = reorder(make, desc(meanval)), y = meanval)) + geom_violin() + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Make") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Make') + ylab('Avg. Selling Price')
-mkgroup 
+mkgroup %>% ggplot(., aes(x = reorder(make, desc(medianval)), y = medianval)) + geom_violin() + geom_errorbar(aes(ymin=medianval-std, ymax=medianval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Make") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Make') + ylab('Avg. Selling Price')
+mkgroup = as.data.frame(mkgroup)
+mkgroup
 
 #By Body Style 
-bdygroup %>% ggplot(., aes(x = reorder(body_style, desc(meanval)), y = meanval)) + geom_bar(stat = "identity") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Body Style") + xlab('Body Style') + ylab('Avg. Selling Price')
+bdygroup %>% ggplot(., aes(x = reorder(body_style, desc(meanval)), y = meanval)) + geom_bar(stat = "identity", fill = "magenta") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Body Style") + xlab('Body Style') + ylab('Avg. Selling Price')
 
 #By Fuel Type
-fuelgroup %>% ggplot(., aes(x = reorder(fuel, desc(meanval)), y = meanval)) + geom_bar(stat = "identity") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Fuel Type") + xlab('Fuel Type') + ylab('Avg. Selling Price')
+fuelgroup %>% ggplot(., aes(x = reorder(fuel, desc(meanval)), y = meanval)) + geom_bar(stat = "identity", fill = "green") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Energy Source") + xlab('Energy Source') + ylab('Avg. Selling Price')
 
 #By Transmission
-trnsmsngroup %>% ggplot(., aes(x = transmission, y = meanval)) + geom_bar(stat = "identity") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Transmission Type") + xlab('Transmission') + ylab('Avg. Selling Price')
-trnsmsngroup
+trnsmsngroup %>% ggplot(., aes(x = transmission, y = meanval)) + geom_bar(stat = "identity", fill = "gray") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Transmission Type") + xlab('Transmission') + ylab('Avg. Selling Price')
+
+plot(density(withautomatic), xlab = "price", main = "Resale Value of Automatic vs. Manual Transmission", col = "orange")
+lines(density(withmanual), col = "dark green")
+legend("topleft", c("Automatic", "Manual"), lwd = 2, col = c("orange", "dark green"))
+abline(v = mean(withautomatic), lwd = 2, lty = 2, col = "orange")
+abline(v = mean(withmanual), lwd = 2, lty = 2, col = "dark green")
+
+t.test(withautomatic, withmanual, alternative = "two.sided")
 
 #By Accident
-acc %>% ggplot(., aes(x = reorder(accident, desc(meanval)), y = meanval)) + geom_bar(stat = "identity") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Comparing Used Cars by Title Status") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Title Status') + ylab('Selling Price')
-noacc %>% ggplot(., aes(x = accreport, y = meanval)) + geom_bar(stat = "identity") + geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Side-by-Side Used Car Accident vs. Non-Accident Comparison") + xlab('') + ylab('Selling Price')
-noacc
+numacc = cardata %>% group_by(accident) %>% summarize(tot = n(), medianval = median(price), std = sd(price))
+numacc %>% filter(tot > 7) %>% ggplot(., aes(x = reorder(accident, desc(medianval)), y = medianval)) + geom_bar(stat = "identity", fill = "brown") + geom_errorbar(aes(ymin=medianval-std, ymax=medianval+std), width=.1) + geom_point() + ggtitle("Comparing Used Cars by Title Status") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Title Status') + ylab('Selling Price')
+noacc %>% ggplot(., aes(x = accreport, y = medianval)) + geom_bar(stat = "identity", fill = "gold") + geom_errorbar(aes(ymin=medianval-std, ymax=medianval+std), width=.1) + geom_point() + ggtitle("Side-by-Side Used Car Accident vs. Non-Accident Comparison") + xlab('') + ylab('Selling Price')
+
+plot(density(withoutaccident), xlab = "price", main = "Accident vs. No Accident Data", col = "red")
+lines(density(withaccident), col = "blue")
+legend("topleft", c("No Accidents Reported", "Accidents Reported"), lwd = 1, col = c("red", "blue"))
+abline(v = mean(withoutaccident), lwd = 2, lty = 2, col = "red")
+abline(v = mean(withaccident), lwd = 2, lty = 2, col = "blue")
+
+t.test(withaccident, withoutaccident, alternative = "two.sided")
 
 #By Model
-modeldata %>% ggplot(., aes(x = reorder(model, desc(meanval)), y = meanval)) + geom_bar(stat = 'identity')+ geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Model (50 or More Data Points)") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Model') + ylab('Avg. Selling Price')
+modeldata %>% ggplot(., aes(x = reorder(model, desc(meanval)), y = meanval)) + geom_bar(stat = 'identity', fill = 'cyan')+ geom_errorbar(aes(ymin=meanval-std, ymax=meanval+std), width=.1) + geom_point() + ggtitle("Used Car Resale Data: Price vs. Model (50 or More Data Points)") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab('Model') + ylab('Avg. Selling Price')
